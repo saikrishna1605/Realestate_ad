@@ -31,7 +31,9 @@
   var scrubFill    = document.getElementById('scrubFill');
   var frameLoader  = document.getElementById('frameLoader');
   var loaderPct    = document.getElementById('loaderPct');
-  var overlays = [1, 2, 3, 4, 5].map(function (n) { return document.getElementById('overlayPhase' + n); });
+  var overlays = [1, 2, 3, 4, 5].map(function (n) {
+    return document.getElementById('overlayPhase' + n) || document.querySelector('[data-phase="' + (n - 1) + '"]');
+  });
 
   /* 5 Synchronized Narrative Phases */
   var PHASES = [
@@ -119,7 +121,17 @@
   function finished(loadedIdx) {
     inFlight--;
     doneCount++;
-    if (loaderPct) loaderPct.textContent = 'Loading architectural sequence — ' + Math.round(doneCount / N * 100) + '%';
+    if (loaderPct) {
+      var isFa = document.documentElement.lang === 'fa';
+      var pct = Math.round(doneCount / N * 100);
+      if (isFa) {
+        var pDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+        var pStr = String(pct).replace(/[0-9]/g, function (d) { return pDigits[+d]; });
+        loaderPct.textContent = 'در حال بارگذاری — ' + pStr + '٪';
+      } else {
+        loaderPct.textContent = 'Loading architectural sequence — ' + pct + '%';
+      }
+    }
     if (!loaderHidden && (doneCount >= Math.min(CFG.minReady, N) || status[0] === 2)) {
       hideLoader();
     }
@@ -229,14 +241,34 @@
 
     heroSection.classList.toggle('at-start', progress < 0.04);
     heroSection.classList.toggle('in-progress', progress >= 0.04 && progress < 0.99);
+    heroSection.classList.toggle('at-end', progress >= 0.99);
     if (scrubFill) scrubFill.style.height = (progress * 100) + '%';
 
+    var activeChapter = 1;
     for (var i = 0; i < overlays.length; i++) {
       var el = overlays[i];
       if (!el) continue;
       var on = progress >= PHASES[i][0] && progress < PHASES[i][1];
       if (el.classList.contains('is-active') !== on) el.classList.toggle('is-active', on);
+      if (progress >= PHASES[i][0]) activeChapter = i + 1;
     }
+
+    var chapterInd = document.getElementById('chapterIndicator');
+    if (chapterInd) {
+      var isFa = document.documentElement.lang === 'fa';
+      var pDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+      var cur = (activeChapter < 10 ? '0' : '') + activeChapter;
+      var tot = '05';
+      if (isFa) {
+        cur = cur.replace(/[0-9]/g, function (d) { return pDigits[+d]; });
+        tot = tot.replace(/[0-9]/g, function (d) { return pDigits[+d]; });
+      }
+      chapterInd.textContent = cur + ' / ' + tot;
+    }
+    var prevBtn = document.getElementById('prevChapter');
+    var nextBtn = document.getElementById('nextChapter');
+    if (prevBtn) prevBtn.disabled = (activeChapter <= 1);
+    if (nextBtn) nextBtn.disabled = (activeChapter >= 5);
   }
 
   /* ---------------- events ---------------- */
@@ -287,6 +319,33 @@
     getConfigKey: function () { return key; },
     getTotalFrames: function () { return N; }
   };
+
+  /* chapter navigation click handlers */
+  var phaseScrollTargets = [0.0, 0.28, 0.48, 0.68, 0.99];
+  var prevBtnEl = document.getElementById('prevChapter');
+  var nextBtnEl = document.getElementById('nextChapter');
+  if (prevBtnEl) {
+    prevBtnEl.addEventListener('click', function () {
+      var curCh = 1;
+      for (var ph = 0; ph < PHASES.length; ph++) {
+        if (progress >= PHASES[ph][0]) curCh = ph + 1;
+      }
+      var targetIdx = Math.max(0, curCh - 2);
+      var total = heroSection.offsetHeight - window.innerHeight;
+      window.scrollTo({ top: phaseScrollTargets[targetIdx] * total, behavior: 'smooth' });
+    });
+  }
+  if (nextBtnEl) {
+    nextBtnEl.addEventListener('click', function () {
+      var curCh = 1;
+      for (var ph = 0; ph < PHASES.length; ph++) {
+        if (progress >= PHASES[ph][0]) curCh = ph + 1;
+      }
+      var targetIdx = Math.min(4, curCh);
+      var total = heroSection.offsetHeight - window.innerHeight;
+      window.scrollTo({ top: phaseScrollTargets[targetIdx] * total, behavior: 'smooth' });
+    });
+  }
 
   /* ---------------- start ---------------- */
   onScrollGlobal();
